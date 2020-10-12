@@ -4869,6 +4869,10 @@
         "category": "Message",
         "code": 6242
     },
+    "Save module and type reference directive resolution information in '.tsbuildinfo' file.": {
+        "category": "Message",
+        "code": 6243
+    },
 
     "Projects to reference": {
         "category": "Message",
