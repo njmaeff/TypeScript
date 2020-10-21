@@ -1076,13 +1076,18 @@ const a: string = "hello";`),
         });
     });
 
-    describe("unittests:: tsbuild:: watchMode:: persistentResolutions", () => {
-        verifyTscWatch({
-            scenario: "persistResolutions",
-            subScenario: "saves resolution and uses it for new program",
-            sys: () => createWatchedSystem([
+    describe("unittests:: tsbuild:: watchMode:: persistResolutions", () => {
+        function getSys(outFile?: string) {
+            return createWatchedSystem([
                 {
                     path: `${projectRoot}/src/main.ts`,
+                    content: Utils.dedent`
+                        import { something } from "./filePresent";
+                        import { something as something1 } from "./filePresent";
+                        import { something2 } from "./fileNotFound";`,
+                },
+                {
+                    path: `${projectRoot}/src/anotherFileReusingResolution.ts`,
                     content: Utils.dedent`
                         import { something } from "./filePresent";
                         import { something2 } from "./fileNotFound";`,
@@ -1099,12 +1104,42 @@ const a: string = "hello";`),
                             composite: true,
                             persistResolutions: true,
                             traceResolution: true,
+                            outFile
                         },
                         include: ["src/**/*.ts"]
                     }),
                 },
                 libFile
-            ], { currentDirectory: projectRoot }),
+            ], { currentDirectory: projectRoot });
+        }
+
+        function getSysWithSavedResolutions(outFile?: string) {
+            const sys = getSys(outFile);
+            const exit = sys.exit;
+            sys.exit = noop;
+            fakes.withTemporaryPatchingForBuildinfoReadWrite(sys, sys => executeCommandLine(sys, noop, ["--b", "."]));
+            sys.exit = exit;
+            sys.clearOutput();
+            return sys;
+        }
+
+        function getSysWithClearedResolutions(outFile?: string) {
+            const sys = getSys(outFile);
+            const exit = sys.exit;
+            sys.exit = noop;
+            fakes.withTemporaryPatchingForBuildinfoReadWrite(sys, sys => {
+                executeCommandLine(sys, noop, ["--b", "."]);
+                executeCommandLine(sys, noop, ["--b", ".", "--cleanPersistedProgram"]);
+            });
+            sys.exit = exit;
+            sys.clearOutput();
+            return sys;
+        }
+
+        verifyTscWatch({
+            scenario: "persistResolutions",
+            subScenario: "saves resolution and uses it for new program",
+            sys: getSys,
             commandLineArgs: ["--b", ".", "-w", "--extendedDiagnostics"],
             changes: [
                 {
@@ -1133,39 +1168,7 @@ const a: string = "hello";`),
         verifyTscWatch({
             scenario: "persistResolutions",
             subScenario: "can build after resolutions have been saved in tsbuildinfo file",
-            sys: () => {
-                const sys = createWatchedSystem([
-                    {
-                        path: `${projectRoot}/src/main.ts`,
-                        content: Utils.dedent`
-                        import { something } from "./filePresent";
-                        import { something2 } from "./fileNotFound";`,
-                    },
-                    {
-                        path: `${projectRoot}/src/filePresent.ts`,
-                        content: `export function something() { return 10; }`,
-                    },
-                    {
-                        path: `${projectRoot}/tsconfig.json`,
-                        content: JSON.stringify({
-                            compilerOptions: {
-                                module: "amd",
-                                composite: true,
-                                persistResolutions: true,
-                                traceResolution: true,
-                            },
-                            include: ["src/**/*.ts"]
-                        }),
-                    },
-                    libFile
-                ], { currentDirectory: projectRoot });
-                const exit = sys.exit;
-                sys.exit = noop;
-                fakes.withTemporaryPatchingForBuildinfoReadWrite(sys, sys => executeCommandLine(sys, noop, ["--b", "."]));
-                sys.exit = exit;
-                sys.clearOutput();
-                return sys;
-           },
+            sys: getSysWithSavedResolutions,
             commandLineArgs: ["--b", ".", "-w", "--extendedDiagnostics"],
             changes: [
                 {
@@ -1194,42 +1197,7 @@ const a: string = "hello";`),
         verifyTscWatch({
             scenario: "persistResolutions",
             subScenario: "can build after resolutions are cleaned",
-            sys: () => {
-                const sys = createWatchedSystem([
-                    {
-                        path: `${projectRoot}/src/main.ts`,
-                        content: Utils.dedent`
-                        import { something } from "./filePresent";
-                        import { something2 } from "./fileNotFound";`,
-                    },
-                    {
-                        path: `${projectRoot}/src/filePresent.ts`,
-                        content: `export function something() { return 10; }`,
-                    },
-                    {
-                        path: `${projectRoot}/tsconfig.json`,
-                        content: JSON.stringify({
-                            compilerOptions: {
-                                module: "amd",
-                                composite: true,
-                                persistResolutions: true,
-                                traceResolution: true,
-                            },
-                            include: ["src/**/*.ts"]
-                        }),
-                    },
-                    libFile
-                ], { currentDirectory: projectRoot });
-                const exit = sys.exit;
-                sys.exit = noop;
-                fakes.withTemporaryPatchingForBuildinfoReadWrite(sys, sys => {
-                    executeCommandLine(sys, noop, ["--b", "."]);
-                    executeCommandLine(sys, noop, ["--b", ".", "--cleanPersistedProgram"]);
-                });
-                sys.exit = exit;
-                sys.clearOutput();
-                return sys;
-            },
+            sys: getSysWithClearedResolutions,
             commandLineArgs: ["--b", ".", "-w", "--extendedDiagnostics"],
             changes: [
                 {
@@ -1259,32 +1227,7 @@ const a: string = "hello";`),
         verifyTscWatch({
             scenario: "persistResolutions",
             subScenario: "saves resolution and uses it for new program with outFile",
-            sys: () => createWatchedSystem([
-                {
-                    path: `${projectRoot}/src/main.ts`,
-                    content: Utils.dedent`
-                        import { something } from "./filePresent";
-                        import { something2 } from "./fileNotFound";`,
-                },
-                {
-                    path: `${projectRoot}/src/filePresent.ts`,
-                    content: `export function something() { return 10; }`,
-                },
-                {
-                    path: `${projectRoot}/tsconfig.json`,
-                    content: JSON.stringify({
-                        compilerOptions: {
-                            module: "amd",
-                            composite: true,
-                            persistResolutions: true,
-                            traceResolution: true,
-                            outFile: "outFile.js"
-                        },
-                        include: ["src/**/*.ts"]
-                    }),
-                },
-                libFile
-            ], { currentDirectory: projectRoot }),
+            sys: () => getSys("outFile.js"),
             commandLineArgs: ["--b", ".", "-w", "--extendedDiagnostics"],
             changes: [
                 {
@@ -1313,40 +1256,7 @@ const a: string = "hello";`),
         verifyTscWatch({
             scenario: "persistResolutions",
             subScenario: "can build after resolutions have been saved in tsbuildinfo file with outFile",
-            sys: () => {
-                const sys = createWatchedSystem([
-                    {
-                        path: `${projectRoot}/src/main.ts`,
-                        content: Utils.dedent`
-                        import { something } from "./filePresent";
-                        import { something2 } from "./fileNotFound";`,
-                    },
-                    {
-                        path: `${projectRoot}/src/filePresent.ts`,
-                        content: `export function something() { return 10; }`,
-                    },
-                    {
-                        path: `${projectRoot}/tsconfig.json`,
-                        content: JSON.stringify({
-                            compilerOptions: {
-                                module: "amd",
-                                composite: true,
-                                persistResolutions: true,
-                                traceResolution: true,
-                                outFile: "outFile.js"
-                            },
-                            include: ["src/**/*.ts"]
-                        }),
-                    },
-                    libFile
-                ], { currentDirectory: projectRoot });
-                const exit = sys.exit;
-                sys.exit = noop;
-                fakes.withTemporaryPatchingForBuildinfoReadWrite(sys, sys => executeCommandLine(sys, noop, ["--b", "."]));
-                sys.exit = exit;
-                sys.clearOutput();
-                return sys;
-            },
+            sys: () => getSysWithSavedResolutions("outFile.js"),
             commandLineArgs: ["--b", ".", "-w", "--extendedDiagnostics"],
             changes: [
                 {
@@ -1375,43 +1285,7 @@ const a: string = "hello";`),
         verifyTscWatch({
             scenario: "persistResolutions",
             subScenario: "can build after resolutions are cleaned with outFile",
-            sys: () => {
-                const sys = createWatchedSystem([
-                    {
-                        path: `${projectRoot}/src/main.ts`,
-                        content: Utils.dedent`
-                        import { something } from "./filePresent";
-                        import { something2 } from "./fileNotFound";`,
-                    },
-                    {
-                        path: `${projectRoot}/src/filePresent.ts`,
-                        content: `export function something() { return 10; }`,
-                    },
-                    {
-                        path: `${projectRoot}/tsconfig.json`,
-                        content: JSON.stringify({
-                            compilerOptions: {
-                                module: "amd",
-                                composite: true,
-                                persistResolutions: true,
-                                traceResolution: true,
-                                outFile: "outFile.js"
-                            },
-                            include: ["src/**/*.ts"]
-                        }),
-                    },
-                    libFile
-                ], { currentDirectory: projectRoot });
-                const exit = sys.exit;
-                sys.exit = noop;
-                fakes.withTemporaryPatchingForBuildinfoReadWrite(sys, sys => {
-                    executeCommandLine(sys, noop, ["--b", "."]);
-                    executeCommandLine(sys, noop, ["--b", ".", "--cleanPersistedProgram"]);
-                });
-                sys.exit = exit;
-                sys.clearOutput();
-                return sys;
-            },
+            sys: () => getSysWithClearedResolutions("outFile.js"),
             commandLineArgs: ["--b", ".", "-w", "--extendedDiagnostics"],
             changes: [
                 {
