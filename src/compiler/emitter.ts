@@ -403,6 +403,42 @@ namespace ts {
                 return;
             }
             // Transform the source files
+            if (compilerOptions.transpiler === Transpiler.Babel) {
+
+                if (!isSourceFile(sourceFileOrBundle)){
+                    throw new Error(`Bundle not supported for babel transpiler`);
+                }
+                try {
+                    const compiler = require('@babel/core');
+                    const {text, fileName} = sourceFileOrBundle
+                    if (text) {
+                        const output = compiler.transformSync(
+                            text,
+                            {
+                                filename: fileName,
+                                rootMode: "upward",
+                            }
+                        );
+                        writeFile(host, emitterDiagnostics, jsFilePath, output.code, !!compilerOptions.emitBOM, [sourceFileOrBundle]);
+                        if (output.map) {
+                            if (!output.map.sourceRoot) {
+                                output.map.sourceRoot =
+                                    getDirectoryPath(
+                                        getRelativePathFromFile(jsFilePath, fileName, createGetCanonicalFileName(host.useCaseSensitiveFileNames()))
+                                    )
+                            }
+                            writeFile(host, emitterDiagnostics, `${jsFilePath}.map`, JSON.stringify(output.map), !!compilerOptions.emitBOM, [sourceFileOrBundle]);
+                        }
+                    }
+                    return
+                }
+                catch (e) {
+                    if (e.code === 'MODULE_NOT_FOUND') {
+                        throw new Error(`@babel/core not found...`);
+                    }
+                    throw e
+                }
+            }
             const transform = transformNodes(resolver, host, factory, compilerOptions, [sourceFileOrBundle], scriptTransformers, /*allowDtsFiles*/ false);
 
             const printerOptions: PrinterOptions = {

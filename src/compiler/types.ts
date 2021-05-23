@@ -4835,6 +4835,12 @@ namespace ts {
     }
 
     /* @internal */
+    export const enum Transpiler {
+        Babel = 'babel',
+        Typescript = 'typescript'
+    }
+
+    /* @internal */
     export const enum EnumKind {
         Numeric,                            // Numeric enum (each member has a TypeFlags.Enum type)
         Literal                             // Literal enum (each member has a TypeFlags.EnumLiteral type)
