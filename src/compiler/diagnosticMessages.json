@@ -4937,7 +4937,10 @@
         "code": 6387,
         "reportsDeprecated": true
     },
-
+    "Choose transpiler for project": {
+        "category": "Message",
+        "code": 6389
+    },
     "The expected type comes from property '{0}' which is declared here on type '{1}'": {
         "category": "Message",
         "code": 6500

@@ -15,7 +15,8 @@ namespace ts {
      * @param action The action to execute.
      * @param sourceFilesOrTargetSourceFile
      *   If an array, the full list of source files to emit.
-     *   Else, calls `getSourceFilesToEmit` with the (optional) target source file to determine the list of source files to emit.
+     *   Else, calls `getSourceFilesToEmit` with the (optional) target source
+     *     file to determine the list of source files to emit.
      */
     export function forEachEmittedFile<T>(
         host: EmitHost, action: (emitFileNames: EmitFileNames, sourceFileOrBundle: SourceFile | Bundle | undefined) => T,
@@ -404,6 +405,42 @@ namespace ts {
                 return;
             }
             // Transform the source files
+            if (compilerOptions.transpiler === Transpiler.Babel) {
+
+                if (!isSourceFile(sourceFileOrBundle)){
+                    throw new Error("Bundle not supported for babel transpiler");
+                }
+                try {
+                    const compiler = require("@babel/core");
+                    const {text, fileName} = sourceFileOrBundle;
+                    if (text) {
+                        const output = compiler.transformSync(
+                            text,
+                            {
+                                filename: fileName,
+                                rootMode: "upward",
+                            }
+                        );
+                        writeFile(host, emitterDiagnostics, jsFilePath, output.code, !!compilerOptions.emitBOM, [sourceFileOrBundle]);
+                        if (output.map) {
+                            if (!output.map.sourceRoot) {
+                                output.map.sourceRoot =
+                                    getDirectoryPath(
+                                        getRelativePathFromFile(jsFilePath, fileName, createGetCanonicalFileName(host.useCaseSensitiveFileNames()))
+                                    );
+                            }
+                            writeFile(host, emitterDiagnostics, jsFilePath + ".map", JSON.stringify(output.map), !!compilerOptions.emitBOM, [sourceFileOrBundle]);
+                        }
+                    }
+                    return;
+                }
+                catch (e) {
+                    if (e.code === "MODULE_NOT_FOUND") {
+                        throw new Error("@babel/core not found...");
+                    }
+                    throw e;
+                }
+            }
             const transform = transformNodes(resolver, host, factory, compilerOptions, [sourceFileOrBundle], scriptTransformers, /*allowDtsFiles*/ false);
 
             const printerOptions: PrinterOptions = {
@@ -985,7 +1022,8 @@ namespace ts {
         }
 
         /**
-         * If `sourceFile` is `undefined`, `node` must be a synthesized `TypeNode`.
+         * If `sourceFile` is `undefined`, `node` must be a synthesized
+         * `TypeNode`.
          */
         function writeNode(hint: EmitHint, node: TypeNode, sourceFile: undefined, output: EmitTextWriter): void;
         function writeNode(hint: EmitHint, node: Node, sourceFile: SourceFile, output: EmitTextWriter): void;
@@ -2546,9 +2584,11 @@ namespace ts {
         }
 
         /**
-         * emitBinaryExpression includes an embedded work stack to attempt to handle as many nested binary expressions
-         * as possible without creating any additional stack frames. This can only be done when the emit pipeline does
-         * not require notification/substitution/comment/sourcemap decorations.
+         * emitBinaryExpression includes an embedded work stack to attempt to
+         * handle as many nested binary expressions as possible without
+         * creating any additional stack frames. This can only be done when the
+         * emit pipeline does not require
+         * notification/substitution/comment/sourcemap decorations.
          */
         function emitBinaryExpression(node: BinaryExpression) {
             const nodeStack = [node];
@@ -3834,8 +3874,8 @@ namespace ts {
         }
 
         /**
-         * Emits any prologue directives at the start of a Statement list, returning the
-         * number of prologue directives written to the output.
+         * Emits any prologue directives at the start of a Statement list,
+         * returning the number of prologue directives written to the output.
          */
         function emitPrologueDirectives(statements: readonly Node[], sourceFile?: SourceFile, seenPrologueDirectives?: Set<string>, recordBundleFileSection?: true): number {
             let needsToSetSourceFile = !!sourceFile;
@@ -4840,8 +4880,8 @@ namespace ts {
         }
 
         /**
-         * Returns a value indicating whether a name is unique globally, within the current file,
-         * or within the NameGenerator.
+         * Returns a value indicating whether a name is unique globally, within
+         * the current file, or within the NameGenerator.
          */
         function isUniqueName(name: string): boolean {
             return isFileLevelUniqueName(name)
@@ -4850,14 +4890,16 @@ namespace ts {
         }
 
         /**
-         * Returns a value indicating whether a name is unique globally or within the current file.
+         * Returns a value indicating whether a name is unique globally or
+         * within the current file.
          */
         function isFileLevelUniqueName(name: string) {
             return currentSourceFile ? ts.isFileLevelUniqueName(currentSourceFile, name, hasGlobalName) : true;
         }
 
         /**
-         * Returns a value indicating whether a name is unique within a container.
+         * Returns a value indicating whether a name is unique within a
+         * container.
          */
         function isUniqueLocalName(name: string, container: Node): boolean {
             for (let node = container; isNodeDescendantOf(node, container); node = node.nextContainer!) {
@@ -4874,8 +4916,9 @@ namespace ts {
 
         /**
          * Return the next available name in the pattern _a ... _z, _0, _1, ...
-         * TempFlags._i or TempFlags._n may be used to express a preference for that dedicated name.
-         * Note that names generated by makeTempVariableName and makeUniqueName will never conflict.
+         * TempFlags._i or TempFlags._n may be used to express a preference for
+         * that dedicated name. Note that names generated by
+         * makeTempVariableName and makeUniqueName will never conflict.
          */
         function makeTempVariableName(flags: TempFlags, reservedInNestedScopes?: boolean): string {
             if (flags && !(tempFlags & flags)) {
@@ -4907,11 +4950,13 @@ namespace ts {
         }
 
         /**
-         * Generate a name that is unique within the current file and doesn't conflict with any names
-         * in global scope. The name is formed by adding an '_n' suffix to the specified base name,
-         * where n is a positive integer. Note that names generated by makeTempVariableName and
-         * makeUniqueName are guaranteed to never conflict.
-         * If `optimistic` is set, the first instance will use 'baseName' verbatim instead of 'baseName_1'
+         * Generate a name that is unique within the current file and doesn't
+         * conflict with any names in global scope. The name is formed by
+         * adding an '_n' suffix to the specified base name, where n is a
+         * positive integer. Note that names generated by makeTempVariableName
+         * and makeUniqueName are guaranteed to never conflict. If `optimistic`
+         * is set, the first instance will use 'baseName' verbatim instead of
+         * 'baseName_1'
          */
         function makeUniqueName(baseName: string, checkFn: (name: string) => boolean = isUniqueName, optimistic?: boolean, scoped?: boolean): string {
             if (optimistic) {
@@ -4959,7 +5004,8 @@ namespace ts {
         }
 
         /**
-         * Generates a unique name for an ImportDeclaration or ExportDeclaration.
+         * Generates a unique name for an ImportDeclaration or
+         * ExportDeclaration.
          */
         function generateNameForImportOrExportDeclaration(node: ImportDeclaration | ExportDeclaration) {
             const expr = getExternalModuleName(node)!; // TODO: GH#18217
@@ -5457,7 +5503,8 @@ namespace ts {
         }
 
         /**
-         * Skips trivia such as comments and white-space that can be optionally overridden by the source-map source
+         * Skips trivia such as comments and white-space that can be optionally
+         * overridden by the source-map source
          */
         function skipSourceTrivia(source: SourceMapSource, pos: number): number {
             return source.skipTrivia ? source.skipTrivia(pos) : skipTrivia(source.text, pos);
@@ -5466,8 +5513,8 @@ namespace ts {
         /**
          * Emits a mapping.
          *
-         * If the position is synthetic (undefined or a negative value), no mapping will be
-         * created.
+         * If the position is synthetic (undefined or a negative value), no
+         * mapping will be created.
          *
          * @param pos The position.
          */
@@ -5500,7 +5547,8 @@ namespace ts {
         }
 
         /**
-         * Emits a token of a node with possible leading and trailing source maps.
+         * Emits a token of a node with possible leading and trailing source
+         * maps.
          *
          * @param node The node containing the token.
          * @param token The token to emit.

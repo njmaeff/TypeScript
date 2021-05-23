@@ -396,6 +396,12 @@ namespace ts {
             transpileOptionValue: undefined
         },
         {
+            name: "transpiler",
+            type: "string",
+            category: Diagnostics.Basic_Options,
+            description: Diagnostics.Choose_transpiler_for_project,
+        },
+        {
             name: "allowJs",
             type: "boolean",
             affectsModuleResolution: true,
